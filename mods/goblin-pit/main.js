@@ -20,19 +20,25 @@ const PAGE = "mods/goblin-court/art/hall/torn-page.png";
 const OPEN = { x: 715, y: 657, rx: 130, ry: 83 };   // the hole's opening in the hall image (pit_overlays.py OPEN)
 const OVER = { x: 500, y: 560 };                    // where pit-front/pit-shade.png sit in the hall image (430x336)
 const BASE_Y = 722;                                 // the arm's base row: inside the opening, just above its near lip
-const BASE_X = [600, 770];
-const COL = 194;                                    // the forearm column that stretches (pit/arm-f[-grip]-col.png)                          // the base stays inside the opening
-// Timeline (ms from t0). Ryan: smooth and dynamic, the claw must look like it picks the goblin up. One painted reach
-// pose (arm-f) shoots out of the hole ALONG ITS OWN LENGTH to the goblin, the claw closes (arm-f-grip), and it slides
-// back the same way dragging him, then both drop into the hole. Positions are computed every tick (no pose swaps
-// mid-flight), and the goblin is drawn between the arm and its lower talons (arm-f-grip-front), so he's held.
-const T = { roll: [30, 520], strike: [580, 880], grip: 880, lift: [880, 1010], yank: [1170, 1580], sink: [1580, 1970],
-  close: 2000,             // the tab closes; the next goblin walks up under the still-open hall
-  unroll: [2950, 3550] };  // then the page slides back down over the new terminal, and the scene ends
-const END = 3600;
+const BASE_X = [600, 770];                          // the base stays inside the opening
+// Ryan: no jumping, no stretched arm, nothing clipped in the pit. So the goblin WALKS to a fixed spot at the pit's
+// edge (always the same distance from the hole, so the painted arm always reaches him exactly), the arm rises out of
+// the hole as painted (rear -> full reach as quick crossfades between the three paintings, its root in the hole under
+// the near lip), the claw closes on him (talons in front, arm behind), and it hauls him back over the hole and down.
 const SINK = 200;                                   // hall px the claw and goblin drop into the hole
 const ease = { out: (u) => 1 - (1 - u) ** 3, in: (u) => u ** 3, inOut: (u) => (u < 0.5 ? 4 * u ** 3 : 1 - (-2 * u + 2) ** 3 / 2) };
-const prog = (el, [a, b], f = ease.inOut) => f(Math.min(1, Math.max(0, (el - a) / (b - a))));
+const clamp01 = (u) => Math.min(1, Math.max(0, u));
+const prog = (el, [a, b], f = ease.inOut) => f(clamp01((el - a) / (b - a)));
+const HORIZON_IMG = -1500;                          // the hall's perspective (goblin-court): size grows with (y - horizon)
+
+// The timeline, once the walk's length is known (ms from t0).
+const timeline = (walkMs) => {
+  const a = 560 + walkMs;                           // he arrives at the pit's edge
+  // The pose blends are short (a quick whip, not two ghost arms); the goblin's own moves are eased in between.
+  return { roll: [30, 520], walk: [560, a], rise: [a + 120, a + 200], strike: [a + 330, a + 410], grip: a + 410,
+    rear: [a + 700, a + 790], over: [a + 900, a + 990], sink: [a + 1050, a + 1450], close: a + 1500,
+    unroll: [a + 2400, a + 3000], end: a + 3050 };
+};
 
 export default class GoblinPit extends View {
   init(_p, cx) {
@@ -45,10 +51,13 @@ export default class GoblinPit extends View {
       const el = Date.now() - t0;
       this.el = el;
       cx.notify();   // every tick: the scene is a continuous motion
+      const T = this.T;
+      if (!T) return;   // set by the first render (it needs the scene's geometry)
+      const END = T.end;
       if (this.p.main && !this.closed && el >= T.close) {
         this.closed = true;
         // The court skips its own curtain for the walk-up this causes: this scene rolls the page back down.
-        setShared("goblin.pitAfter", Date.now() + (END - T.close) + 300);
+        setShared("goblin.pitAfter", Date.now() + (T.end - T.close) + 300);
         if (this.p.tab) run("tab.close", { id: this.p.tab, confirmed: true });   // first, so the court never redraws him
         const req = shared("goblin.pit");
         if (req && req.t === this.p.req) setShared("goblin.pit", null);
@@ -66,62 +75,102 @@ export default class GoblinPit extends View {
     const { s, offX, offY } = cover;
     const rx = region.x, ry = region.y, el = this.el ?? 0;
     const X = (hx) => offX + hx * s - rx, Y = (hy) => offY + hy * s - ry;   // hall px -> this popup's px
+    const H = (wx, wy) => ({ x: (wx - offX) / s, y: (wy - offY) / s });      // window px -> hall px
     const at = (e, x, y, w, h) => e.absolute().left(Math.round(x)).top(Math.round(y)).w(Math.round(w)).h(Math.round(h));
     const kids = [];
     // Only what changes is drawn: the live court, queue, tags, nameplate and King show through around it.
-    // Inside the terminal's rectangle: the hall (as the layout draws it), revealed as the page rolls up.
     const clipT = (child) => at(div(), term.x - rx, term.y - ry, term.w, term.h).overflow_hidden().child(child);
     if (term) kids.push(clipT(at(image(bg), (cover.wideX ?? offX) - term.x, offY - term.y, bgW * s, bgH * s)));
 
-    // The arm: one painted reach (arm-f) whose forearm stretches (column COL repeated, tilted) as far as needed so
-    // the palm lands exactly on the goblin's chest wherever he stands, while its root stays in the hole (Ryan's
-    // "super long arm"; a fixed-length arm fell short and the goblin jumped to it). Hall px throughout.
-    const F = arm.f, G = arm["f-grip"];
-    const cH = { x: (victim.x + victim.w * 0.5 - offX) / s, y: (victim.y + victim.h * 0.52 - offY) / s };   // chest
-    const reach = F.base[0] - F.palm[0];
-    const bx = Math.min(BASE_X[1], Math.max(BASE_X[0], cH.x + reach));
-    const n = Math.max(0, bx - cH.x - reach);                          // extra forearm length
-    const dy = Math.max(-0.6 * n, Math.min(0.6 * n, BASE_Y - F.base[1] + F.palm[1] - cH.y));   // its tilt
-    const O1 = { x: bx - F.base[0] - n, y: BASE_Y - F.base[1] - dy };  // the art's top-left at full reach
-    const axis = { x: F.base[0] + n - F.palm[0], y: F.base[1] + dy - F.palm[1] };   // palm -> root
-    const out = el < T.yank[0] ? prog(el, T.strike, ease.out) : 1 - prog(el, T.yank, ease.inOut);
-    const drop = prog(el, T.sink, ease.in) * SINK;
-    const O = { x: O1.x + axis.x * (1 - out), y: O1.y + axis.y * (1 - out) + drop };
-    const gripped = el >= T.grip;
-    const P = gripped ? G : F;
-    const palm = { x: X(O.x + P.palm[0]), y: Y(O.y + P.palm[1]) };
-    const showArm = el >= T.strike[0];
-    const clipR = X(bx) + 6 * s;                                      // past the root = inside the hole
-    const name = gripped ? "arm-f-grip" : "arm-f";
-    const armEls = () => {
-      const els = [at(image(PIT + `${name}-claw.png`), X(O.x), Y(O.y), F.w * s, F.h * s)];
-      // Images keep their proportions in Herdr, so the stretch is laid as 4 px strips (the column x4), each one
-      // nudged for the tilt; the rest of the arm is drawn after and covers the last strip's overhang.
-      for (let k = 0; k * 4 < n; k++)
-        els.push(at(image(PIT + `${name}-col4.png`), X(O.x + COL + k * 4), Y(O.y + (dy * k * 4) / n), 4 * s + 1, F.h * s));
-      els.push(at(image(PIT + `${name}-rest.png`), X(O.x + n), Y(O.y + dy), F.w * s, F.h * s));
-      return els;
+    // Where each painted pose sits: full reach (f) roots at the hole's centre; the rearing poses (e, h) root a little
+    // right so their claw hangs over the opening (what it holds goes into the hole, not beside it).
+    const baseX = (name) => { const a = arm[name] ?? arm.f; return name[0] === "f" ? OPEN.x : Math.min(BASE_X[1] + 70, OPEN.x - 55 + (a.base[0] - a.palm[0])); };
+    const box = (name, drop = 0) => {
+      const a = arm[name] ?? arm.f;
+      return { x: X(baseX(name)) - a.base[0] * s, y: Y(BASE_Y + drop) - a.base[1] * s, w: a.w * s, h: a.h * s, a };
     };
-    const clipArm = (els) => div().absolute().left(0).top(0).w(Math.max(0, Math.round(clipR))).h(region.h).overflow_hidden().children(els);
+    const palmOf = (name, drop = 0) => { const b = box(name, drop); return { x: b.x + b.a.palm[0] * s, y: b.y + b.a.palm[1] * s }; };
 
-    // The goblin: flails where he stands; once gripped he's drawn into the palm, then follows it exactly.
-    const vArt = victim.art.replace(/-idle\.gif$/, "-blocked.gif");
-    const home = { x: victim.x - rx, y: victim.y - ry };
-    const inPalm = { x: palm.x - victim.w * 0.5, y: palm.y - victim.h * 0.52 };
-    const k = gripped ? prog(el, T.lift, ease.out) : 0;
-    const shake = gripped && el < T.yank[0] ? Math.sin(el / 22) * 2 * s : 0;   // he struggles in the grip
-    const v = { x: home.x + (inPalm.x - home.x) * k + shake, y: home.y + (inPalm.y - home.y) * k };
+    // The goblin's walk: from where he stands to the spot whose chest is the full reach's palm, sized by perspective.
+    const feetFrac = 186 / 192, chestFrac = 0.52;
+    const start = { x: victim.x - rx, y: victim.y - ry, w: victim.w, h: victim.h };
+    const startFeetH = H(victim.x + victim.w / 2, victim.y + victim.h * feetFrac).y;
+    const P = palmOf("f");
+    let k = 1;   // his size at the spot: height scales with the floor depth of his feet
+    for (let it = 0; it < 4; it++) {
+      const feetY = (P.y + ry) + victim.h * k * (feetFrac - chestFrac);
+      k = (H(0, feetY).y - HORIZON_IMG) / (startFeetH - HORIZON_IMG);
+    }
+    const spot = { w: victim.w * k, h: victim.h * k };
+    spot.x = P.x - spot.w * 0.5; spot.y = P.y - spot.h * chestFrac;
+    if (!this.T) {
+      const dist = Math.hypot(spot.x - start.x, spot.y - start.y) / s;          // hall px
+      this.T = timeline(Math.round(Math.min(1500, Math.max(500, dist / 0.42))));   // ~420 hall px/s, 0.5..1.5 s
+    }
+    const T = this.T;
 
-    if (showArm && el < T.close) kids.push(clipArm(armEls()));
-    if (el < T.close) kids.push(at(image(vArt), v.x, v.y, victim.w, victim.h));
-    if (showArm && gripped && el < T.close) kids.push(clipArm([at(image(PIT + "arm-f-grip-front.png"), X(O.x), Y(O.y), F.w * s, F.h * s)]));
+    // The arm: which paintings show and how strongly (crossfades), and where the palm is.
+    const drop = prog(el, T.sink, ease.in) * SINK;
+    const gripped = el >= T.grip;
+    const layers = [];   // [name, opacity]
+    let palm = null;
+    if (el >= T.rise[0] && el < T.close) {
+      if (!gripped) {
+        const u = prog(el, T.strike, ease.out);
+        layers.push(["e", prog(el, T.rise, ease.out) * (1 - u)], ["f", u]);
+        const a = palmOf("e"), b = palmOf("f"); palm = { x: a.x + (b.x - a.x) * u, y: a.y + (b.y - a.y) * u };
+      } else {
+        const u1 = prog(el, T.rear, ease.inOut), u2 = prog(el, T.over, ease.inOut);
+        const hName = arm["h-grip"] ? "h-grip" : "e-grip";
+        layers.push(["f-grip", 1 - u1], [hName, u1 * (1 - u2)], ["e-grip", u2]);
+        const a = palmOf("f-grip"), b = palmOf(hName), c = palmOf("e-grip", drop);
+        palm = u2 > 0 ? { x: b.x + (c.x - b.x) * u2, y: b.y + (c.y - b.y) * u2 } : { x: a.x + (b.x - a.x) * u1, y: a.y + (b.y - a.y) * u1 };
+      }
+    }
+    const armEls = layers.filter(([, o]) => o > 0.02)
+      .map(([name, o]) => { const b = box(name, name === "e-grip" ? drop : 0); return at(image(PIT + `arm-${name}.png`), b.x, b.y, b.w, b.h).opacity(o); });
+
+    // The goblin: walks to the pit's edge, flails, then is held in the claw and follows the palm exactly.
+    const art = victim.art.replace(/-idle\.gif$/, "");
+    let v, vSrc;
+    if (el < T.walk[1]) {
+      const u = prog(el, T.walk, (x) => x);
+      v = { x: start.x + (spot.x - start.x) * u, y: start.y + (spot.y - start.y) * u, w: start.w + (spot.w - start.w) * u, h: start.h + (spot.h - start.h) * u };
+      vSrc = el >= T.walk[0] ? `${art}-walk${spot.x < start.x ? "-left" : ""}.gif` : `${art}-blocked.gif`;
+    } else {
+      v = { ...spot }; vSrc = `${art}-blocked.gif`;
+      if (palm && gripped) { v.x = palm.x - spot.w * 0.5; v.y = palm.y - spot.h * chestFrac; }   // held: follows the claw
+      if (gripped && el < T.rear[0]) v.x += Math.sin(el / 22) * 2 * s;   // he struggles in the grip
+    }
+    if (el < T.close) {
+      kids.push(...armEls);
+      kids.push(at(image(vSrc), v.x, v.y, v.w, v.h));
+      // the closed claw's lower talons in front of him, while the full-reach grip painting is the one showing
+      if (gripped && layers[0] && layers[0][1] > 0.5) { const b = box("f-grip"); kids.push(at(image(PIT + "arm-f-grip-front.png"), b.x, b.y, b.w, b.h).opacity(layers[0][1])); }
+    }
+    // The King gives the order (Ryan): a parchment speech bubble (the name-tag scrap, at the room's pixel size) beside
+    // his head while the goblin walks to the edge, until the claw has him. Fades in and out.
+    const king = this.p.king;
+    if (king && king.colX != null) {
+      const sayIn = prog(el, [T.walk[0] - 80, T.walk[0] + 120], ease.out), sayOut = 1 - prog(el, [T.grip + 150, T.grip + 400], ease.in);
+      const o = Math.min(sayIn, sayOut);
+      if (o > 0.02) {
+        const bw = 96 * s * 1.1, bh = 30 * s * 1.1;   // tag.png 96x30 art px; text box 5..91 x 5..26
+        const bx = king.colX - rx - bw - 4 * s, by = king.y - ry + king.h * 0.14 - (1 - sayIn) * 6 * s;
+        kids.push(at(div(), bx, by, bw, bh).opacity(o)
+          .child(image("mods/goblin-court/art/ui/plate/tag.png").absolute().left(0).top(0).size_full())
+          .child(div().absolute().left(Math.round(5 / 96 * bw)).top(Math.round(5 / 30 * bh)).w(Math.round(86 / 96 * bw)).h(Math.round(21 / 30 * bh))
+            .flex().items_center().justify_center()
+            .child(div().text_size(Math.max(10, 12.5 * s)).font_semibold().text_color("#5a120c").child("Into the pit!"))));
+      }
+    }
     // The hole's darkness and near lip over them, inside the terminal's rectangle: what goes down disappears.
     if (term) {
       kids.push(clipT(at(image(PIT + "pit-shade.png"), X(OVER.x) - (term.x - rx), Y(OVER.y) - (term.y - ry), 430 * s, 336 * s)));
       kids.push(clipT(at(image(PIT + "pit-front.png"), X(OVER.x) - (term.x - rx), Y(OVER.y) - (term.y - ry), 430 * s, 336 * s)));
     }
-    // The terminal's torn page slides up off the top (its torn bottom edge leading), and at the end slides back
-    // down; drawn exactly as the terminal block draws it (cover fit, centred), so start and end match the terminal.
+    // The terminal's torn page slides up off the top (torn edge leading), and at the end slides back down; drawn
+    // exactly as the terminal block draws it (cover fit, centred), so start and end match the terminal.
     const up = el < T.unroll[0] ? prog(el, T.roll, ease.in) : 1 - prog(el, T.unroll, ease.out);
     if (term && up < 1) {
       const PW = 312, PHt = 528, ps = Math.max(term.w / PW, term.h / PHt);
