@@ -127,7 +127,7 @@ export default class GoblinPit extends View {
         palm = u2 > 0 ? { x: b.x + (c.x - b.x) * u2, y: b.y + (c.y - b.y) * u2 } : { x: a.x + (b.x - a.x) * u1, y: a.y + (b.y - a.y) * u1 };
       }
     }
-    const armEls = layers.filter(([, o]) => o > 0.02)
+    const armEls = () => layers.filter(([, o]) => o > 0.02)
       .map(([name, o]) => { const b = box(name, name === "e-grip" ? drop : 0); return at(image(PIT + `arm-${name}.png`), b.x, b.y, b.w, b.h).opacity(o); });
 
     // The goblin: walks to the pit's edge, flails, then is held in the claw and follows the palm exactly.
@@ -142,12 +142,23 @@ export default class GoblinPit extends View {
       if (palm && gripped) { v.x = palm.x - spot.w * 0.5; v.y = palm.y - spot.h * chestFrac; }   // held: follows the claw
       if (gripped && el < T.rear[0]) v.x += Math.sin(el / 22) * 2 * s;   // he struggles in the grip
     }
-    if (el < T.close) {
-      kids.push(...armEls);
-      kids.push(at(image(vSrc), v.x, v.y, v.w, v.h));
+    // Split at the hole's inner left edge (Ryan: the arm clipped the side of the pit). Right of it the arm and goblin
+    // are over the hole, so the near lip goes over them (the root, and what sinks, disappear into the pit); left of
+    // it they lie over the rim and the floor, so they are drawn on top of the lip.
+    const XIN = Math.round(X(OPEN.x - OPEN.rx));
+    // Built fresh for each side: an element can only have one parent.
+    const moving = () => {
+      if (el >= T.close) return [];
+      const els = [...armEls(), at(image(vSrc), v.x, v.y, v.w, v.h)];
       // the closed claw's lower talons in front of him, while the full-reach grip painting is the one showing
-      if (gripped && layers[0] && layers[0][1] > 0.5) { const b = box("f-grip"); kids.push(at(image(PIT + "arm-f-grip-front.png"), b.x, b.y, b.w, b.h).opacity(layers[0][1])); }
-    }
+      if (gripped && layers[0] && layers[0][1] > 0.5) { const b = box("f-grip"); els.push(at(image(PIT + "arm-f-grip-front.png"), b.x, b.y, b.w, b.h).opacity(layers[0][1])); }
+      return els;
+    };
+    const band = (x0, x1, els) => div().absolute().left(Math.max(0, x0)).top(0).w(Math.max(0, Math.min(region.w, x1) - Math.max(0, x0))).h(region.h)
+      .overflow_hidden().child(div().absolute().left(-Math.max(0, x0)).top(0).w(region.w).h(region.h).children(els));
+    const overHole = el < T.close && XIN < region.w ? band(XIN, region.w, moving()) : null;
+    const overRim = el < T.close && XIN > 0 ? band(0, XIN, moving()) : null;
+    if (overHole) kids.push(overHole);
     // The King gives the order (Ryan): a parchment speech bubble (the name-tag scrap, at the room's pixel size) beside
     // his head while the goblin walks to the edge, until the claw has him. Fades in and out.
     const king = this.p.king;
@@ -169,6 +180,7 @@ export default class GoblinPit extends View {
       kids.push(clipT(at(image(PIT + "pit-shade.png"), X(OVER.x) - (term.x - rx), Y(OVER.y) - (term.y - ry), 430 * s, 336 * s)));
       kids.push(clipT(at(image(PIT + "pit-front.png"), X(OVER.x) - (term.x - rx), Y(OVER.y) - (term.y - ry), 430 * s, 336 * s)));
     }
+    if (overRim) kids.push(overRim);   // on top of the lip: the arm and goblin out over the rim and floor (see the split)
     // The terminal's torn page slides up off the top (torn edge leading), and at the end slides back down; drawn
     // exactly as the terminal block draws it (cover fit, centred), so start and end match the terminal.
     const up = el < T.unroll[0] ? prog(el, T.roll, ease.in) : 1 - prog(el, T.unroll, ease.out);
