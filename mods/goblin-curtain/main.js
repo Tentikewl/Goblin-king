@@ -16,6 +16,7 @@ export default class GoblinCurtain extends View {
     this.hold = p.hold ?? 600; this.open = p.open ?? 450;
     this.opened = false;
     const start = Date.now();
+    this.key = start;
     let done = false;
     cx.timer.every(30, (cx) => {
       if (done) return;
@@ -44,7 +45,9 @@ export default class GoblinCurtain extends View {
       // The dialogue box: a thin gold line along the top that unrolls downward to full height.
       // The torn page (the terminal block's background) unrolls downward from a thin strip.
       // The page slides down from above the top (torn bottom edge leading) to exactly where the terminal draws it.
-      .child(div().id("box").absolute().left(0).top(o ? 0 : -h).w(w).h(h).transition("top", tr)
+      // A unique id per curtain: Herdr keeps an element's last animated position by id, so a shared id made a new
+      // curtain start from where the previous one ended (Ryan: "starts half open" when switching spaces).
+      .child(div().id(`box-${this.key}`).absolute().left(0).top(o ? 0 : -h).w(w).h(h).transition("top", tr)
         .child(image(PAGE).absolute().left((w - pw) / 2).top((h - ph) / 2).w(pw).h(ph)));
   }
 }

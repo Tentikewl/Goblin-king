@@ -20,7 +20,8 @@ const PAGE = "mods/goblin-court/art/hall/torn-page.png";
 const OPEN = { x: 715, y: 657, rx: 130, ry: 83 };   // the hole's opening in the hall image (pit_overlays.py OPEN)
 const OVER = { x: 500, y: 560 };                    // where pit-front/pit-shade.png sit in the hall image (430x336)
 const BASE_Y = 722;                                 // the arm's base row: inside the opening, just above its near lip
-const BASE_X = [600, 770];                          // the base stays inside the opening
+const BASE_X = [600, 770];
+const COL = 194;                                    // the forearm column that stretches (pit/arm-f[-grip]-col.png)                          // the base stays inside the opening
 // Timeline (ms from t0). Ryan: smooth and dynamic, the claw must look like it picks the goblin up. One painted reach
 // pose (arm-f) shoots out of the hole ALONG ITS OWN LENGTH to the goblin, the claw closes (arm-f-grip), and it slides
 // back the same way dragging him, then both drop into the hole. Positions are computed every tick (no pose swaps
@@ -72,22 +73,36 @@ export default class GoblinPit extends View {
     const clipT = (child) => at(div(), term.x - rx, term.y - ry, term.w, term.h).overflow_hidden().child(child);
     if (term) kids.push(clipT(at(image(bg), (cover.wideX ?? offX) - term.x, offY - term.y, bgW * s, bgH * s)));
 
-    // The arm's final placement: its base in the hole, its palm on the goblin's chest (as far as it reaches).
-    const F = arm.f, chest = { x: victim.x + victim.w * 0.5, y: victim.y + victim.h * 0.52 };   // window px
-    const baseHX = Math.min(BASE_X[1], Math.max(BASE_X[0], (chest.x - offX) / s + (F.base[0] - F.palm[0])));
-    const A1 = { x: X(baseHX) - F.base[0] * s, y: Y(BASE_Y) - F.base[1] * s };
-    // Retracted: slid back along the arm so the palm sits at the base (in the hole).
-    const A0 = { x: A1.x + (F.base[0] - F.palm[0]) * s, y: A1.y + (F.base[1] - F.palm[1]) * s };
+    // The arm: one painted reach (arm-f) whose forearm stretches (column COL repeated, tilted) as far as needed so
+    // the palm lands exactly on the goblin's chest wherever he stands, while its root stays in the hole (Ryan's
+    // "super long arm"; a fixed-length arm fell short and the goblin jumped to it). Hall px throughout.
+    const F = arm.f, G = arm["f-grip"];
+    const cH = { x: (victim.x + victim.w * 0.5 - offX) / s, y: (victim.y + victim.h * 0.52 - offY) / s };   // chest
+    const reach = F.base[0] - F.palm[0];
+    const bx = Math.min(BASE_X[1], Math.max(BASE_X[0], cH.x + reach));
+    const n = Math.max(0, bx - cH.x - reach);                          // extra forearm length
+    const dy = Math.max(-0.6 * n, Math.min(0.6 * n, BASE_Y - F.base[1] + F.palm[1] - cH.y));   // its tilt
+    const O1 = { x: bx - F.base[0] - n, y: BASE_Y - F.base[1] - dy };  // the art's top-left at full reach
+    const axis = { x: F.base[0] + n - F.palm[0], y: F.base[1] + dy - F.palm[1] };   // palm -> root
     const out = el < T.yank[0] ? prog(el, T.strike, ease.out) : 1 - prog(el, T.yank, ease.inOut);
-    const drop = prog(el, T.sink, ease.in) * SINK * s;
-    const A = { x: A0.x + (A1.x - A0.x) * out, y: A0.y + (A1.y - A0.y) * out + drop };
+    const drop = prog(el, T.sink, ease.in) * SINK;
+    const O = { x: O1.x + axis.x * (1 - out), y: O1.y + axis.y * (1 - out) + drop };
     const gripped = el >= T.grip;
-    const palm = { x: A.x + (gripped ? arm["f-grip"].palm[0] : F.palm[0]) * s, y: A.y + (gripped ? arm["f-grip"].palm[1] : F.palm[1]) * s };
+    const P = gripped ? G : F;
+    const palm = { x: X(O.x + P.palm[0]), y: Y(O.y + P.palm[1]) };
     const showArm = el >= T.strike[0];
-    // Everything of the arm past its base is inside the hole: clip it there.
-    const clipR = X(baseHX) + 6 * s;
-    const armImg = (name) => at(image(PIT + name), A.x, A.y, F.w * s, F.h * s);
-    const clipArm = (child) => div().absolute().left(0).top(0).w(Math.max(0, Math.round(clipR))).h(region.h).overflow_hidden().child(child);
+    const clipR = X(bx) + 6 * s;                                      // past the root = inside the hole
+    const name = gripped ? "arm-f-grip" : "arm-f";
+    const armEls = () => {
+      const els = [at(image(PIT + `${name}-claw.png`), X(O.x), Y(O.y), F.w * s, F.h * s)];
+      // Images keep their proportions in Herdr, so the stretch is laid as 4 px strips (the column x4), each one
+      // nudged for the tilt; the rest of the arm is drawn after and covers the last strip's overhang.
+      for (let k = 0; k * 4 < n; k++)
+        els.push(at(image(PIT + `${name}-col4.png`), X(O.x + COL + k * 4), Y(O.y + (dy * k * 4) / n), 4 * s + 1, F.h * s));
+      els.push(at(image(PIT + `${name}-rest.png`), X(O.x + n), Y(O.y + dy), F.w * s, F.h * s));
+      return els;
+    };
+    const clipArm = (els) => div().absolute().left(0).top(0).w(Math.max(0, Math.round(clipR))).h(region.h).overflow_hidden().children(els);
 
     // The goblin: flails where he stands; once gripped he's drawn into the palm, then follows it exactly.
     const vArt = victim.art.replace(/-idle\.gif$/, "-blocked.gif");
@@ -97,9 +112,9 @@ export default class GoblinPit extends View {
     const shake = gripped && el < T.yank[0] ? Math.sin(el / 22) * 2 * s : 0;   // he struggles in the grip
     const v = { x: home.x + (inPalm.x - home.x) * k + shake, y: home.y + (inPalm.y - home.y) * k };
 
-    if (showArm && el < T.close) kids.push(clipArm(armImg(gripped ? "arm-f-grip.png" : "arm-f.png")));
+    if (showArm && el < T.close) kids.push(clipArm(armEls()));
     if (el < T.close) kids.push(at(image(vArt), v.x, v.y, victim.w, victim.h));
-    if (showArm && gripped && el < T.close) kids.push(clipArm(armImg("arm-f-grip-front.png")));
+    if (showArm && gripped && el < T.close) kids.push(clipArm([at(image(PIT + "arm-f-grip-front.png"), X(O.x), Y(O.y), F.w * s, F.h * s)]));
     // The hole's darkness and near lip over them, inside the terminal's rectangle: what goes down disappears.
     if (term) {
       kids.push(clipT(at(image(PIT + "pit-shade.png"), X(OVER.x) - (term.x - rx), Y(OVER.y) - (term.y - ry), 430 * s, 336 * s)));
