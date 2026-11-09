@@ -43,8 +43,8 @@ export default class GoblinCurtain extends View {
       .when(!!bg, (el) => el.child(image(bg).absolute().left(offX).top(offY).w(dw).h(dh)))
       // The dialogue box: a thin gold line along the top that unrolls downward to full height.
       // The torn page (the terminal block's background) unrolls downward from a thin strip.
-      .child(div().id("box").absolute().left(0).top(0).w(w).h(o ? h : 10).overflow_hidden()
-        .transition("height", tr)
+      // The page slides down from above the top (torn bottom edge leading) to exactly where the terminal draws it.
+      .child(div().id("box").absolute().left(0).top(o ? 0 : -h).w(w).h(h).transition("top", tr)
         .child(image(PAGE).absolute().left((w - pw) / 2).top((h - ph) / 2).w(pw).h(ph)));
   }
 }

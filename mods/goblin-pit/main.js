@@ -21,20 +21,17 @@ const OPEN = { x: 715, y: 657, rx: 130, ry: 83 };   // the hole's opening in the
 const OVER = { x: 500, y: 560 };                    // where pit-front/pit-shade.png sit in the hall image (430x336)
 const BASE_Y = 722;                                 // the arm's base row: inside the opening, just above its near lip
 const BASE_X = [600, 770];                          // the base stays inside the opening
-// Phases: [start ms, arm pose (null = none), victim: "spot" | "palm"]. The arm swaps poses instantly (a strike).
-const PH = [
-  [0, null, "spot"],          // the page, still down
-  [30, null, "spot"],         // the page rolls up
-  [520, "e", "spot"],       // bursts out of the pit
-  [660, "h", "spot"],         // half way (if painted)
-  [780, "f", "spot"],         // full reach
-  [1020, "f-grip", "palm"],   // clenches on the goblin
-  [1420, "h-grip", "palm"],   // yanks it back (if painted)
-  [1540, "e-grip", "palm"],
-  [1720, "e-grip", "sink"],   // both sink into the hole
-];
-const END = 2200;
-const SINK = 180;                                   // hall px the arm and goblin drop into the hole
+// Timeline (ms from t0). Ryan: smooth and dynamic, the claw must look like it picks the goblin up. One painted reach
+// pose (arm-f) shoots out of the hole ALONG ITS OWN LENGTH to the goblin, the claw closes (arm-f-grip), and it slides
+// back the same way dragging him, then both drop into the hole. Positions are computed every tick (no pose swaps
+// mid-flight), and the goblin is drawn between the arm and its lower talons (arm-f-grip-front), so he's held.
+const T = { roll: [30, 520], strike: [580, 880], grip: 880, lift: [880, 1010], yank: [1170, 1580], sink: [1580, 1970],
+  close: 2000,             // the tab closes; the next goblin walks up under the still-open hall
+  unroll: [2950, 3550] };  // then the page slides back down over the new terminal, and the scene ends
+const END = 3600;
+const SINK = 200;                                   // hall px the claw and goblin drop into the hole
+const ease = { out: (u) => 1 - (1 - u) ** 3, in: (u) => u ** 3, inOut: (u) => (u < 0.5 ? 4 * u ** 3 : 1 - (-2 * u + 2) ** 3 / 2) };
+const prog = (el, [a, b], f = ease.inOut) => f(Math.min(1, Math.max(0, (el - a) / (b - a))));
 
 export default class GoblinPit extends View {
   init(_p, cx) {
@@ -45,94 +42,76 @@ export default class GoblinPit extends View {
     cx.timer.every(30, (cx) => {
       if (done) return;
       const el = Date.now() - t0;
-      let ph = 0;
-      for (let i = 0; i < PH.length; i++) if (el >= PH[i][0]) ph = i;
       this.el = el;
-      if (ph !== this.phase || el < 560) { this.phase = ph; cx.notify(); }   // redraw every tick while the page rolls
+      cx.notify();   // every tick: the scene is a continuous motion
+      if (this.p.main && !this.closed && el >= T.close) {
+        this.closed = true;
+        // The court skips its own curtain for the walk-up this causes: this scene rolls the page back down.
+        setShared("goblin.pitAfter", Date.now() + (END - T.close) + 300);
+        if (this.p.tab) run("tab.close", { id: this.p.tab, confirmed: true });   // first, so the court never redraws him
+        const req = shared("goblin.pit");
+        if (req && req.t === this.p.req) setShared("goblin.pit", null);
+      }
       if (el >= END) {
         done = true;
         closeOverlay(this.p.overlay);
-        if (this.p.main) {
-          const req = shared("goblin.pit");
-          if (req && req.t === this.p.req) setShared("goblin.pit", null);
-          if (this.p.tab) run("tab.close", { id: this.p.tab, confirmed: true });
-        }
       }
     });
   }
 
   render(_cx) {
-    const { region, cover, term, figs = [], king, victim, bg, bgW = 1152, bgH = 896, arm = {} } = this.p;
-    if (!region || !cover || !victim) return div();
+    const { region, cover, term, victim, bg, bgW = 1152, bgH = 896, arm = {} } = this.p;
+    if (!region || !cover || !victim || !arm.f) return div();
     const { s, offX, offY } = cover;
-    const rx = region.x, ry = region.y;
+    const rx = region.x, ry = region.y, el = this.el ?? 0;
     const X = (hx) => offX + hx * s - rx, Y = (hy) => offY + hy * s - ry;   // hall px -> this popup's px
-    const at = (el, x, y, w, h) => el.absolute().left(Math.round(x)).top(Math.round(y)).w(Math.round(w)).h(Math.round(h));
-    const [, poseWanted, hold] = PH[this.phase];
-    // Poses that weren't painted fall back to their neighbours.
-    const pose = poseWanted && (arm[poseWanted] ? poseWanted : poseWanted.replace(/^h/, "e"));
+    const at = (e, x, y, w, h) => e.absolute().left(Math.round(x)).top(Math.round(y)).w(Math.round(w)).h(Math.round(h));
     const kids = [];
+    // Only what changes is drawn: the live court, queue, tags, nameplate and King show through around it.
+    // Inside the terminal's rectangle: the hall (as the layout draws it), revealed as the page rolls up.
+    const clipT = (child) => at(div(), term.x - rx, term.y - ry, term.w, term.h).overflow_hidden().child(child);
+    if (term) kids.push(clipT(at(image(bg), (cover.wideX ?? offX) - term.x, offY - term.y, bgW * s, bgH * s)));
 
-    // The room, aligned exactly as the layout background (cover fit to the window).
-    kids.push(at(image(bg), (cover.wideX ?? offX) - rx, offY - ry, bgW * s, bgH * s));
-    // Everyone else in the hall, back to front, with their floor shadows.
-    for (const f of figs) {
-      const k = f.kind === "runt" ? { l: 0.27, w: 0.46, t: 0.9 } : { l: 0.31, w: 0.38, t: 0.955 };
-      kids.push(div().absolute().left(Math.round(f.x + f.w * k.l - rx)).top(Math.round(f.y + f.h * k.t - ry))
-        .w(Math.round(f.w * k.w)).h(Math.max(3, Math.round(f.h * 0.05))).rounded(999).bg("#00000066"));
-    }
-    for (const f of [...figs].sort((a, b) => a.z - b.z)) kids.push(at(image(f.src), f.x - rx, f.y - ry, f.w, f.h));
+    // The arm's final placement: its base in the hole, its palm on the goblin's chest (as far as it reaches).
+    const F = arm.f, chest = { x: victim.x + victim.w * 0.5, y: victim.y + victim.h * 0.52 };   // window px
+    const baseHX = Math.min(BASE_X[1], Math.max(BASE_X[0], (chest.x - offX) / s + (F.base[0] - F.palm[0])));
+    const A1 = { x: X(baseHX) - F.base[0] * s, y: Y(BASE_Y) - F.base[1] * s };
+    // Retracted: slid back along the arm so the palm sits at the base (in the hole).
+    const A0 = { x: A1.x + (F.base[0] - F.palm[0]) * s, y: A1.y + (F.base[1] - F.palm[1]) * s };
+    const out = el < T.yank[0] ? prog(el, T.strike, ease.out) : 1 - prog(el, T.yank, ease.inOut);
+    const drop = prog(el, T.sink, ease.in) * SINK * s;
+    const A = { x: A0.x + (A1.x - A0.x) * out, y: A0.y + (A1.y - A0.y) * out + drop };
+    const gripped = el >= T.grip;
+    const palm = { x: A.x + (gripped ? arm["f-grip"].palm[0] : F.palm[0]) * s, y: A.y + (gripped ? arm["f-grip"].palm[1] : F.palm[1]) * s };
+    const showArm = el >= T.strike[0];
+    // Everything of the arm past its base is inside the hole: clip it there.
+    const clipR = X(baseHX) + 6 * s;
+    const armImg = (name) => at(image(PIT + name), A.x, A.y, F.w * s, F.h * s);
+    const clipArm = (child) => div().absolute().left(0).top(0).w(Math.max(0, Math.round(clipR))).h(region.h).overflow_hidden().child(child);
 
-    // The arm: its base sits in the hole; it is placed so its full reach lands on the goblin's chest.
-    const chest = { x: victim.x + victim.w * 0.5, y: victim.y + victim.h * 0.52 };      // window px
-    const F = arm.f;
-    let baseHX = OPEN.x;
-    if (F) baseHX = Math.min(BASE_X[1], Math.max(BASE_X[0], (chest.x - offX) / s + (F.base[0] - F.palm[0])));
-    const sink = hold === "sink" ? SINK : 0;
-    // The full reach is placed to land on the goblin; the rearing poses hang their claw over the hole instead, so
-    // what the claw holds is pulled back over the opening and goes down into it (not beside it).
-    const baseFor = (name, a) => (name[0] === "f" ? baseHX
-      : Math.min(BASE_X[1] + 70, OPEN.x - 55 + (a.base[0] - a.palm[0])));
-    const armBox = (name) => {
-      const a = arm[name];
-      return { x: X(baseFor(name, a)) - a.base[0] * s, y: Y(BASE_Y + sink) - a.base[1] * s, w: a.w * s, h: a.h * s, a };
-    };
-    const tSink = { duration: Math.max(1, END - PH[PH.length - 1][0] - 80), easing: "ease-in" };
-
-    // The goblin: flails where it stands, then hangs in the claw (its chest at the palm).
+    // The goblin: flails where he stands; once gripped he's drawn into the palm, then follows it exactly.
     const vArt = victim.art.replace(/-idle\.gif$/, "-blocked.gif");
-    let vx = victim.x - rx, vy = victim.y - ry;
-    if (pose && hold !== "spot") {
-      const b = armBox(pose);
-      vx = b.x + b.a.palm[0] * s - victim.w * 0.5;
-      vy = b.y + b.a.palm[1] * s - victim.h * 0.52;
-    }
-    const vEl = at(div().id("victim"), vx, vy, victim.w, victim.h)
-      .when(hold === "sink", (el) => el.transition("top", tSink))
-      .child(image(vArt).absolute().left(0).top(0).size_full());
-    kids.push(vEl);
-    if (pose) {
-      const b = armBox(pose);
-      kids.push(at(div().id("arm"), b.x, b.y, b.w, b.h)
-        .when(hold === "sink", (el) => el.transition("top", tSink))
-        .child(image(PIT + `arm-${pose}.png`).absolute().left(0).top(0).size_full()));
-    }
-    // The hole's darkness and its near lip, over the arm and the goblin: what goes in, goes down and out of sight.
-    kids.push(at(image(PIT + "pit-shade.png"), X(OVER.x), Y(OVER.y), 430 * s, 336 * s));
-    kids.push(at(image(PIT + "pit-front.png"), X(OVER.x), Y(OVER.y), 430 * s, 336 * s));
-    // The King in front of it all, cut at his column's edge as in the layout.
-    // In a wide window king-corner shows the hall's right side (cover.offXk): match it inside his column.
-    if (king && cover.offXk != null && king.colX != null && cover.offXk !== offX && king.colX < rx + region.w)
-      kids.push(div().absolute().left(Math.round(king.colX - rx)).top(0).w(Math.round(king.clipR - king.colX)).h(region.h).overflow_hidden()
-        .child(at(image(bg), cover.offXk - king.colX, offY - ry, bgW * s, bgH * s)));
-    if (king) kids.push(div().absolute().left(0).top(0).w(Math.max(0, Math.round(king.clipR - rx))).h(region.h).overflow_hidden()
-      .child(at(image(king.src), king.x - rx, king.y - ry, king.w, king.h)));
-    // The terminal's torn page rolls up into a strip.
-    const roll = Math.min(1, Math.max(0, ((this.el ?? 0) - 30) / 450));
-    const pageH = Math.max(0, Math.round(term ? term.h * (1 - roll * roll) : 0));      // ease-in
-    if (term && pageH > 0) kids.push(at(div().id("page"), term.x - rx, term.y - ry, term.w, pageH).overflow_hidden()
-      .child(image(PAGE).absolute().left(0).top(0).w(term.w).h(term.h)));
+    const home = { x: victim.x - rx, y: victim.y - ry };
+    const inPalm = { x: palm.x - victim.w * 0.5, y: palm.y - victim.h * 0.52 };
+    const k = gripped ? prog(el, T.lift, ease.out) : 0;
+    const shake = gripped && el < T.yank[0] ? Math.sin(el / 22) * 2 * s : 0;   // he struggles in the grip
+    const v = { x: home.x + (inPalm.x - home.x) * k + shake, y: home.y + (inPalm.y - home.y) * k };
 
+    if (showArm && el < T.close) kids.push(clipArm(armImg(gripped ? "arm-f-grip.png" : "arm-f.png")));
+    if (el < T.close) kids.push(at(image(vArt), v.x, v.y, victim.w, victim.h));
+    if (showArm && gripped && el < T.close) kids.push(clipArm(armImg("arm-f-grip-front.png")));
+    // The hole's darkness and near lip over them, inside the terminal's rectangle: what goes down disappears.
+    if (term) {
+      kids.push(clipT(at(image(PIT + "pit-shade.png"), X(OVER.x) - (term.x - rx), Y(OVER.y) - (term.y - ry), 430 * s, 336 * s)));
+      kids.push(clipT(at(image(PIT + "pit-front.png"), X(OVER.x) - (term.x - rx), Y(OVER.y) - (term.y - ry), 430 * s, 336 * s)));
+    }
+    // The terminal's torn page slides up off the top (its torn bottom edge leading), and at the end slides back
+    // down; drawn exactly as the terminal block draws it (cover fit, centred), so start and end match the terminal.
+    const up = el < T.unroll[0] ? prog(el, T.roll, ease.in) : 1 - prog(el, T.unroll, ease.out);
+    if (term && up < 1) {
+      const PW = 312, PHt = 528, ps = Math.max(term.w / PW, term.h / PHt);
+      kids.push(clipT(at(image(PAGE), (term.w - PW * ps) / 2, (term.h - PHt * ps) / 2 - term.h * up, PW * ps, PHt * ps)));
+    }
     return div().id("root").relative().w(region.w).h(region.h).overflow_hidden().children(kids);
   }
 }

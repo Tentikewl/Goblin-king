@@ -503,12 +503,15 @@ export default class GoblinCourt extends View {
 
     let extras = [];
     let frontKey = null;
-    if (me && !pitting) {
+    // While the pit scene drags the petitioner off it draws him (and the arm) itself; his nameplate stays up here.
+    if (me) {
       const runts = runtsOf(me.address);
       const runtAsks = runts.some((r) => r.status === "blocked");
       const blocked = me.status === "blocked";
       const shown = shownRunt ? runts.find((r) => r.address === shownRunt) : null;
-      if (shown) {
+      if (pitting) {
+        frontKey = me.address;
+      } else if (shown) {
         // The runt has stepped forward; its parent steps aside. Click the parent to step back.
         frontKey = shown.address;
         place(me, asideSpot, { onClick: () => run("terminal.show", {}) });
@@ -556,7 +559,9 @@ export default class GoblinCourt extends View {
     if (this.front !== undefined && frontKey && frontKey !== this.front && !pitting) {
       // Give the keyboard back to the goblin's terminal, but not while a runt is shown: focusing the
       // goblin's own terminal would undo terminal.show.
-      this.openCurtain(Math.max(250, walkUp), shownRunt ? null : me?.address);
+      // Right after the pit, its own scene rolls the page back down: just give the keyboard back.
+      if (Number(shared("goblin.pitAfter")) > Date.now()) { if (!shownRunt && me) run("pane.focus", { terminal: me.address }); }
+      else this.openCurtain(Math.max(250, walkUp), shownRunt ? null : me?.address);
     }
     if (!pitting) this.front = frontKey;
     this.ready = true;
