@@ -42,10 +42,8 @@ export default class KingCorner extends View {
     const c = shared("goblin.cover");
     if (!c) return [];
     const PAD = 8, TABS = 42, x0 = c.winW - PAD - rightOfKing(layout()) - W, y0 = TABS + PAD, ox = c.offXk ?? c.offX;
-    // The hall's right side (wide windows) or the same middle crop as the court (narrow ones), then its torches.
-    const hall = image("mods/goblin-court/art/hall/goblin-hall.png").absolute().left(Math.round(ox - x0)).top(Math.round(c.offY - y0))
-      .w(Math.round(1152 * c.s)).h(Math.round(896 * c.s));
-    return [hall, ...Object.entries(this.torches).map(([k, b]) => ({ k, x: ox + b.x * c.s - x0, y: c.offY + b.y * c.s - y0, w: b.w * c.s, h: b.h * c.s }))
+    // The hall itself is the layout background; only its torch flames are drawn here.
+    return [...Object.entries(this.torches).map(([k, b]) => ({ k, x: ox + b.x * c.s - x0, y: c.offY + b.y * c.s - y0, w: b.w * c.s, h: b.h * c.s }))
       .filter((b) => b.x + b.w > 0 && b.x < W)
       .map((b) => image(`mods/goblin-court/art/torch/${b.k}.gif`).absolute().left(b.x).top(b.y).w(b.w).h(b.h))];
   }

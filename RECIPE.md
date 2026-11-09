@@ -21,8 +21,8 @@ goblin stands before him with a parchment nameplate, and the terminal sits betwe
   - **King's column** (237 px, `king-corner`): the hall's right side, an "Into the pit" plank button at the top,
     and the King (288x432 art px) at the bottom, spilling past the window edge.
 - Two wall torches flicker (8-frame GIFs over the hall's own flames).
-- Everything is pixel art at the room's pixel scale: the hall (1152x896) is scaled to the window's height; the
-  court shows its left side and the King's column its right side when the window is wider than the hall.
+- Everything is pixel art at the room's pixel scale: the hall is scaled to the window's height (the wide hall
+  continues past both ends of the original on wide screens).
 
 ## How it behaves
 
@@ -46,8 +46,9 @@ goblin stands before him with a parchment nameplate, and the terminal sits betwe
 
 ## Built from
 
-- Layout `layouts/goblin-king.json`: root row (background plain `#0f0d0a`; only the court and King's column draw
-  the hall, so it can't be out of line at the seams), hidden `sidebar`, `work` column:
+- Layout `layouts/goblin-king.json`: root row (background `art/hall/goblin-hall-wide.png`, cover: the 1152x896
+  hall continued 1152 px each side by mirrored end bays, so cover is a height fit on any window up to ~3.9:1 and
+  every mod lines up with it exactly; the mods draw no hall of their own), hidden `sidebar`, `work` column:
   `tabs`, `work-body` row (`court` block → `goblin-court`, `main` tab block, `king-corner` block, hidden `panel`
   with `files`/`changes`), `status`.
 - Mods: `goblin-court` (court, queue, banners, door, walks, nameplates, opens curtain and pit; all art in

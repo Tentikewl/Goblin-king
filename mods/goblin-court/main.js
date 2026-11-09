@@ -27,7 +27,10 @@ const PLATE_H = 64;       // petitioner nameplate height until plates.json loads
 // Layout geometry around the terminal (layouts/goblin-cutscene.json): work-body padding 8, gap 4,
 // tabs bar 42, status bar 28.
 const PAD = 8, GAP = 4, TABS = 42, STATUS = 28;
-const BG = "mods/goblin-court/art/hall/goblin-hall.png";  // v4: pit moved 240 px left, out from under the King (Documents/GoblinKing/room/pitmove/move_pit.py)  // the hall at 2x (Documents/GoblinKing/room/hall2x/hall-2x.png), 128 px goblins
+const BG = "mods/goblin-court/art/hall/goblin-hall.png";
+// The layout background: the same hall continued 1152 px each side (Documents/GoblinKing/room/wide/build_wide.py),
+// so a cover fit of it is a height fit on any window up to ~3.9:1 and every mod can line up with it exactly.
+const BG_WIDE = "mods/goblin-court/art/hall/goblin-hall-wide.png", BG_WIDE_W = 3456;  // v4: pit moved 240 px left, out from under the King (Documents/GoblinKing/room/pitmove/move_pit.py)  // the hall at 2x (Documents/GoblinKing/room/hall2x/hall-2x.png), 128 px goblins
 const BG_W = 1152, BG_H = 896, FLOOR_IMG_Y = 496;  // room image: wall meets floor at y 496
 // Perspective of the room art: tiles at the bottom edge (y 720) are ~1.45x wider than at the wall (y 400), so
 // sizes scale with (y - HORIZON_IMG). FIG_AT_WALL: a goblin's height standing at the wall, in image px
@@ -163,15 +166,15 @@ export default class GoblinCourt extends View {
     return box(this.doorFeet.x, this.doorFeet.y);
   }
 
-  // The hall's placement: scaled to the window's HEIGHT (never cropped top/bottom, so the room and goblins keep
-  // their size on any screen shape). A window narrower than the hall shows its middle (the same crop as the layout
-  // background); a wider one (16:9, ultrawide) shows its left side in the court (offX) and its right side in
-  // king-corner (offXk); the terminal covers the middle, so the two never have to meet. Logical px.
+  // Where the hall is: exactly as the layout draws its background (the wide hall, cover fit, centred), given as
+  // the scale and the ORIGINAL 1152 hall's top-left, which every hall coordinate in these mods is measured from.
+  // The wide hall makes the cover a height fit on normal and wide screens, so the room keeps its size. Logical px.
   cover() {
     const win = this.win;
     if (!win) return null;
-    const s = win.h / BG_H, extra = win.w - BG_W * s;
-    return { s, offX: Math.min(0, extra / 2), offXk: Math.max(extra, extra / 2), offY: 0 };
+    const s = Math.max(win.w / BG_WIDE_W, win.h / BG_H);
+    const offX = (win.w - BG_W * s) / 2, offY = (win.h - BG_H * s) / 2;
+    return { s, offX, offXk: offX, offY, wideX: offX - BG_W * s };
   }
 
   // Where the wall meets the floor, in this block's coordinates.
@@ -208,10 +211,9 @@ export default class GoblinCourt extends View {
     // A newer walk-up replaces the old curtain: left open, it would re-focus the previous goblin's tab.
     if (this.curtain) { try { closeOverlay(this.curtain); } catch {} }
     this.curtain = openOverlay({ mod: "goblin-curtain", kind: "popup", frame: "none", at: { x: r.x * z, y: r.y * z }, width: r.w, height: r.h,
-      // No hall behind the page: the layout background is plain dark (only the court and King's column draw the
-      // hall, so it can never be out of line at the seams).
-      props: { w: r.w, h: r.h, x: r.x, y: r.y, winW: this.win.w, winH: this.win.h, bg: null, bgW: BG_W, bgH: BG_H,
-        hold, open: 450, terminal } });
+      // The hall behind the page, as the layout draws it (wide hall, cover fit).
+      props: { w: r.w, h: r.h, x: r.x, y: r.y, winW: this.win.w, winH: this.win.h, bg: BG_WIDE, bgW: BG_WIDE_W, bgH: BG_H,
+        hold, open: 800, terminal } });
   }
 
   // Play the pit (mods/goblin-pit): the arm comes out of the pit, grabs the petitioner where it stands and drags it
@@ -241,7 +243,7 @@ export default class GoblinCourt extends View {
       // `at` is in unzoomed px, width/height in zoomed (logical) px (measured, see openCurtain).
       openOverlay({ mod: "goblin-pit", kind: "popup", frame: "none", at: { x: r.x * z, y: r.y * z }, width: r.w, height: r.h,
         props: { region: r, main: r.main, t0, cover: c, term, figs, king, victim: { ...petRect, art }, tab: req.tab, req: req.t,
-          bg: BG, bgW: BG_W, bgH: BG_H, arm: this.armMeta } });
+          bg: BG_WIDE, bgW: BG_WIDE_W, bgH: BG_H, arm: this.armMeta } });
     }
   }
 
@@ -571,8 +573,6 @@ export default class GoblinCourt extends View {
         if (h !== this.hover) { this.hover = h; cx.notify(); }
       })
       .on_hover((on, cx) => { if (!on && this.hover) { this.hover = null; cx.notify(); } })
-      // The hall itself (see cover()), under everything in this block.
-      .child(this.cover() ? image(BG).absolute().left(Math.round(toX(0))).top(Math.round(toY(0))).w(Math.round(BG_W * cv.s)).h(Math.round(BG_H * cv.s)) : div())
       .child(div().absolute().left(0).top(0).child(banners))
       .child(div().absolute().left(12).top(BANNERS_H).text_size(11).text_color(t.dim)
         .child(waiting ? `Waiting on you · ${waiting}` : "No one waiting"))

@@ -201,7 +201,10 @@
       "resizable": false
     }
   ],
-  "background": "#0f0d0a",
+  "background": {
+    "image": "mods/goblin-court/art/hall/goblin-hall-wide.png",
+    "fit": "cover"
+  },
   "colors": {
     "background": "#0f0d0a"
   },

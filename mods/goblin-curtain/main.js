@@ -36,6 +36,8 @@ export default class GoblinCurtain extends View {
     const dw = bgW * s, dh = bgH * s;
     const offX = (winW - dw) / 2 - x, offY = (winH - dh) / 2 - y;
     const o = this.opened;
+    // The page exactly as the terminal block draws it (cover fit, centred), so when this closes nothing moves.
+    const PW = 312, PH = 528, ps = Math.max(w / PW, h / PH), pw = PW * ps, ph = PH * ps;
     const tr = { duration: this.open, easing: "ease-out" };
     return div().id("root").relative().w(w).h(h).overflow_hidden()
       .when(!!bg, (el) => el.child(image(bg).absolute().left(offX).top(offY).w(dw).h(dh)))
@@ -43,6 +45,6 @@ export default class GoblinCurtain extends View {
       // The torn page (the terminal block's background) unrolls downward from a thin strip.
       .child(div().id("box").absolute().left(0).top(0).w(w).h(o ? h : 10).overflow_hidden()
         .transition("height", tr)
-        .child(image(PAGE).absolute().left(0).top(0).w(w).h(h)));
+        .child(image(PAGE).absolute().left((w - pw) / 2).top((h - ph) / 2).w(pw).h(ph)));
   }
 }

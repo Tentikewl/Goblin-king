@@ -6,6 +6,11 @@ their turn, and the ones that need you push to the front.
 
 ![Goblin King](preview.png)
 
+**Into the pit:** the King has had enough of a goblin. An arm comes out of the pit, grabs it and drags it down,
+and its tab closes.
+
+![Into the pit](pit.gif)
+
 ## Install
 
 Copy this repo's folders into your Herdr home (`~/.config/herdr-app`, on Windows
@@ -34,7 +39,8 @@ Or ask an agent in Herdr: *"add the Goblin King layout from <repo link>"*.
 ## Notes
 
 - Built and tested on Windows with Herdr 0.1.14. Mac and Linux should work but haven't been tried.
-- The hall scales to the window's height; wider windows give the terminal the extra room.
+- The hall fits the window's height on any screen shape (it runs on past both ends for wide and ultrawide
+  windows); wider windows give the terminal the extra room.
 - The Files/Changes panel only opens when the window has room for it beside the court and the throne.
 - Six clan colours; a seventh space reuses the first.
 - "+ New clan" starts `claude` (Claude Code), so it expects that to be installed.

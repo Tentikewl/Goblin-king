@@ -74,7 +74,7 @@ export default class GoblinPit extends View {
     const kids = [];
 
     // The room, aligned exactly as the layout background (cover fit to the window).
-    kids.push(at(image(bg), offX - rx, offY - ry, bgW * s, bgH * s));
+    kids.push(at(image(bg), (cover.wideX ?? offX) - rx, offY - ry, bgW * s, bgH * s));
     // Everyone else in the hall, back to front, with their floor shadows.
     for (const f of figs) {
       const k = f.kind === "runt" ? { l: 0.27, w: 0.46, t: 0.9 } : { l: 0.31, w: 0.38, t: 0.955 };
