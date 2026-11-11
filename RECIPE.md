@@ -20,7 +20,8 @@ goblin stands before him with a parchment nameplate, and the terminal sits betwe
     cover).
   - **King's column** (237 px, `king-corner`): the hall's right side, an "Into the pit" plank button at the top,
     and the King (288x432 art px) at the bottom, spilling past the window edge.
-- Two wall torches flicker (8-frame GIFs over the hall's own flames).
+- Every wall torch flickers, the extra ones in the end bays too: 8-frame GIFs of just the flame (transparent
+  around it), its pixels repeated 4x so the app's smoothing leaves no edge.
 - Everything is pixel art at the room's pixel scale: the hall is scaled to the window's height (the wide hall
   continues past both ends of the original on wide screens).
 
@@ -41,8 +42,10 @@ goblin stands before him with a parchment nameplate, and the terminal sits betwe
   clan colour at its feet (three pose sets). Click one: `terminal.show`, it steps forward and its parent steps
   aside; click the parent to step back. A runt on Claude Code's "trust this folder?" prompt counts as blocked.
 - **Into the pit**: `goblin-pit-confirm` (torn parchment dialog) → shared `goblin.pit` → the court opens
-  `goblin-pit` as two borderless popups that redraw the whole scene; an arm rises from the pit, grabs the
-  petitioner, drags it in, then `tab.close`.
+  `goblin-pit` as two borderless popups that redraw the whole scene. The petitioner walks to the pit's edge; the
+  arm comes up out of the hole, strikes across the floor and grabs it, curves up, leans in over the hole, stands
+  straight up holding it, then goes straight down into the pit; then `tab.close`. Each arm painting is a frame:
+  hard cuts, never crossfades (~1.6 s from arrival to gone).
 
 ## Built from
 
@@ -70,6 +73,12 @@ goblin stands before him with a parchment nameplate, and the terminal sits betwe
   are fixed px and the terminal takes the rest.
 - Art paths are relative to the Herdr home (`mods/goblin-court/art/...`); nothing lives in `backgrounds/`.
 - The pit closes the thrown goblin's tab: test it on a throwaway tab.
+- Herdr smooths scaled images: a transparent GIF edge blends toward black (a dark outline), and an opaque box
+  holding a copy of the background sits a fraction of a pixel off it (its rectangle shows). Overlays carry only
+  what changes, with pixels repeated (4x for the torches).
+- The curtain's page is cover-fit, so taller than the terminal: "closed" must move it up by (h + page h) / 2,
+  not h, or its bottom edge shows at the top.
+- An image path is cached: a changed GIF needs a new file name.
 
 ## Done when
 

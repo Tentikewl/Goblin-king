@@ -47,7 +47,9 @@ export default class GoblinCurtain extends View {
       // The page slides down from above the top (torn bottom edge leading) to exactly where the terminal draws it.
       // A unique id per curtain: Herdr keeps an element's last animated position by id, so a shared id made a new
       // curtain start from where the previous one ended (Ryan: "starts half open" when switching spaces).
-      .child(div().id(`box-${this.key}`).absolute().left(0).top(o ? 0 : -h).w(w).h(h).transition("top", tr)
+      // Closed = the page's bottom (torn) edge just above the top: the page is cover-fit, so taller than the box, and
+      // moving the box up by only h left the page's bottom hanging into view (Ryan: "a stub of it still visible").
+      .child(div().id(`box-${this.key}`).absolute().left(0).top(o ? 0 : -Math.ceil((h + ph) / 2) - 2).w(w).h(h).transition("top", tr)
         .child(image(PAGE).absolute().left((w - pw) / 2).top((h - ph) / 2).w(pw).h(ph)));
   }
 }

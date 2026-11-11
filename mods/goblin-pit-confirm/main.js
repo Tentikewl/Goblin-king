@@ -45,7 +45,7 @@ export default class PitConfirm extends View {
       })
       .child(image(UI + "dialog-panel.png").absolute().left(0).top(0).w(PANEL_W).h(PANEL_H))
       .child(v_flex().absolute().left(34).top(26).w(PANEL_W - 68).gap(8)
-        .child(div().text_size(18).font_semibold().text_color(GOLD).child(`Cast ${p.name || "this goblin"} into the pit?`))
+        .child(div().text_size(18).font_semibold().text_color(TEXT).child(`Cast ${p.name || "this goblin"} into the pit?`))
         .child(div().text_size(13).text_color(TEXT).child(
           `Its tab closes and the agent ends${runts ? `, with its ${runts} ${runts === 1 ? "runt" : "runts"}` : ""}.`))
         .child(div().text_size(12).text_color(BLOOD).child("Nothing comes back out."))

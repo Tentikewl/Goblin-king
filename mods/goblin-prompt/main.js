@@ -49,9 +49,9 @@ export default class GoblinPrompt extends View {
       .on_key_down((e, cx) => { if (e.key === "escape") { closeOverlay(props().overlay); cx.stop_propagation(); } })
       .child(image(UI + "dialog-panel.png").absolute().left(0).top(0).w(PANEL_W).h(PANEL_H))
       .child(v_flex().absolute().left(34).top(26).w(PANEL_W - 68).gap(10)
-        .child(div().text_size(18).font_semibold().text_color(GOLD).child(p.title ?? ""))
+        .child(div().text_size(18).font_semibold().text_color(TEXT).child(p.title ?? ""))
         .child(Input.new(this.input).h(36).px(10).rounded(2).border(2)
-          .border_color(this.inputFocused ? GOLD : RIM).bg(WELL).text_size(14).text_color(TEXT))
+          .border_color(this.inputFocused ? TEXT : RIM).bg(WELL).text_size(14).text_color(TEXT))
         .when(Boolean(p.hint), (el) => el.child(div().text_size(11.5).text_color(DIM).child(p.hint)))
         .child(h_flex().items_center().justify_end().gap(10).child(cancel).child(plaque)));
   }

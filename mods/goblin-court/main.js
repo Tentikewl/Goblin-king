@@ -309,13 +309,13 @@ export default class GoblinCourt extends View {
       // space with a Claude agent as its first tab, whose goblin walks in through the door.
       v_flex().id("banner-new").items_center().gap(2).cursor_pointer()
         .on_click(() => openOverlay({ mod: "goblin-prompt", kind: "dialog", modal: true, frame: "none", width: 442, height: 252,
-          props: { title: "Name the new clan", value: "", action: "Found clan", hint: "Its first goblin comes in through the door.",
+          props: { title: "Name the new clan", value: "", action: "Found clan",
             command: { name: "space.new", args: { argv: ["claude"] } } } }))
         .child(div().relative().w(BW).h(BH).hover((st) => st.opacity(1)).opacity(0.75)
           .child(image(ART + "ui/banner-new.png").absolute().left(0).top(0).w(BW).h(BH))
           .child(div().absolute().left(0).top(Math.round(BH * 0.3)).w(BW).flex().justify_center()
             .child(div().text_size(24).font_semibold().text_color(GOLD).child("+"))))
-        .child(div().text_size(11).text_color(t.dim).child("New clan")));
+        .child(div().text_size(11).text_color("#ffffff").child("New clan")));
 
     // ---- Perspective ----
     // One rule for everyone: a figure's size comes only from where its feet are on the floor, using the room
@@ -384,7 +384,7 @@ export default class GoblinCourt extends View {
     // Animated torch flames over the hall's own (same pixels, only the flame moves); those inside this block.
     const torchEls = this.cover() ? Object.entries(this.torches).map(([k, b]) => ({ k, x: toX(b.x), y: toY(b.y), w: b.w * cv.s, h: b.h * cv.s }))
       .filter((b) => b.x + b.w > 0 && b.x < W && b.y + b.h > 0 && b.y < H)
-      .map((b) => image(ART + `torch/${b.k}.gif`).absolute().left(b.x).top(b.y).w(b.w).h(b.h)) : [];
+      .map((b) => image(ART + `torch/${this.torches[b.k].f ?? b.k + ".gif"}`).absolute().left(b.x).top(b.y).w(b.w).h(b.h)) : [];
     // What is drawn where (block px), so the pit scene can redraw the hall as it stands.
     const scene = [];
     let walkUp = 0;

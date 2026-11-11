@@ -45,7 +45,7 @@ export default class KingCorner extends View {
     // The hall itself is the layout background; only its torch flames are drawn here.
     return [...Object.entries(this.torches).map(([k, b]) => ({ k, x: ox + b.x * c.s - x0, y: c.offY + b.y * c.s - y0, w: b.w * c.s, h: b.h * c.s }))
       .filter((b) => b.x + b.w > 0 && b.x < W)
-      .map((b) => image(`mods/goblin-court/art/torch/${b.k}.gif`).absolute().left(b.x).top(b.y).w(b.w).h(b.h))];
+      .map((b) => image(`mods/goblin-court/art/torch/${this.torches[b.k].f ?? b.k + ".gif"}`).absolute().left(b.x).top(b.y).w(b.w).h(b.h))];
   }
 
   render(_cx) {
