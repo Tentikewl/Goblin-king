@@ -1,8 +1,7 @@
 # Goblin King
 
-Herdr as a goblin throne hall. Every agent is a pixel-art goblin queueing in a torchlit stone hall to petition
-the person, who is the Goblin King: a huge over-the-shoulder King fills the right edge, the focused agent's
-goblin stands before him with a parchment nameplate, and the terminal sits between them on a torn parchment page.
+Your agents as pixel-art goblins queueing in a torchlit hall to petition you, the Goblin King. Throw the useless
+ones into the pit.
 
 ![Goblin King](preview.png)
 
